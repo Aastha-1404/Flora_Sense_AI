@@ -4,6 +4,11 @@ Profiles are optional reference data and are not generated from model labels.
 Unknown classes return no profile so callers can show an explicit fallback.
 """
 
+from functools import lru_cache
+import json
+from pathlib import Path
+from urllib.parse import urlencode
+
 PLANT_DATA = {
     "African Violet (Saintpaulia ionantha)": {
         "common_name": "African Violet",
@@ -1378,3 +1383,190 @@ def get_plant_profile(plant_name: str):
             return data
 
     return None
+
+
+UNAVAILABLE_BOTANICAL_INFO = "Unavailable: no species-specific fact is verified in the local reference set."
+
+CLASS_LEVEL_SCIENTIFIC_NAMES = {
+    "Begonia (Begonia spp.)": "Begonia spp.",
+    "Calathea": "Goeppertia spp. (formerly Calathea)",
+    "Chinese Evergreen": "Aglaonema spp.",
+    "Chinese evergreen (Aglaonema)": "Aglaonema spp.",
+    "Chrysanthemum": "Chrysanthemum spp.",
+    "Ctenanthe": "Ctenanthe spp.",
+    "Daffodils (Narcissus spp.)": "Narcissus spp.",
+    "Dracaena": "Dracaena spp.",
+    "Dumb Cane (Dieffenbachia spp.)": "Dieffenbachia spp.",
+    "Elephant Ear (Alocasia spp.)": "Alocasia spp.",
+    "Elephant Ear (Alocasia spp.)": "Alocasia spp.",
+    "Kalanchoe": "Kalanchoe spp.",
+    "Lilium (Hemerocallis)": "Lilium spp. / Hemerocallis spp.",
+    "Schefflera": "Heptapleurum spp. (formerly Schefflera)",
+    "Tradescantia": "Tradescantia spp.",
+    "Tulip": "Tulipa spp.",
+    "Yucca": "Yucca spp.",
+}
+
+
+def plant_reference_search_query(common_name: str, scientific_name: str) -> str:
+    scientific = scientific_name.strip()
+    if not scientific or scientific.startswith("Unavailable:"):
+        return common_name.split("/", 1)[0].strip()
+
+    first_taxon = scientific.split("/", 1)[0].strip()
+    tokens = first_taxon.split()
+    if not tokens:
+        return common_name.strip()
+    if len(tokens) > 1 and tokens[1].casefold() not in {"spp.", "sp."}:
+        scientific_query = " ".join(tokens[:2])
+    else:
+        scientific_query = tokens[0]
+    return scientific_query
+
+
+def plant_reference_search_url(common_name: str, scientific_name: str) -> str:
+    query = plant_reference_search_query(common_name, scientific_name)
+    return f"https://www.rhs.org.uk/plants/search-results?{urlencode({'query': query})}"
+
+
+def gbif_taxonomy_match_url(scientific_name: str) -> str:
+    query = scientific_name.strip()
+    if not query or query.startswith("Unavailable:"):
+        return ""
+    return f"https://api.gbif.org/v1/species/match?{urlencode({'name': plant_reference_search_query('', query)})}"
+
+
+def _profile_propagation(profile):
+    guidance = profile.get("pruning_care", "")
+    normalized = guidance.casefold()
+    if "propagate offsets" in normalized:
+        return "Separate the offsets (pups) described in the existing care notes and pot them in spring."
+    if "pups" in normalized and "pot them up" in normalized:
+        return "Pot up the root-base pups described in the existing care notes."
+    if "cuttings root" in normalized:
+        return guidance
+    return UNAVAILABLE_BOTANICAL_INFO
+
+
+@lru_cache(maxsize=2)
+def _read_plant_reference_audit(audit_path, modified_ns, file_size):
+    try:
+        with Path(audit_path).open("r", encoding="utf-8") as audit_file:
+            return json.load(audit_file).get("plants", [])
+    except (OSError, json.JSONDecodeError):
+        return []
+
+
+def _audited_native_region(plant_name):
+    audit_path = Path(__file__).with_name("plant_reference_validation_report.json")
+    if not audit_path.is_file():
+        return UNAVAILABLE_BOTANICAL_INFO
+    stat = audit_path.stat()
+    records = _read_plant_reference_audit(str(audit_path), stat.st_mtime_ns, stat.st_size)
+    for record in records:
+        if plant_name not in record.get("labels", []):
+            continue
+        native_distribution = record.get("gbif_taxonomy", {}).get("native_distribution", [])
+        if not native_distribution:
+            break
+        preview = native_distribution[:6]
+        locations = "; ".join(preview)
+        remaining = len(native_distribution) - len(preview)
+        if remaining:
+            locations += f"; and {remaining} additional native distribution records"
+        return f"GBIF distribution records marked native: {locations}"
+    return UNAVAILABLE_BOTANICAL_INFO
+
+
+def _audited_gbif_match(plant_name):
+    audit_path = Path(__file__).with_name("plant_reference_validation_report.json")
+    if not audit_path.is_file():
+        return None
+    stat = audit_path.stat()
+    records = _read_plant_reference_audit(str(audit_path), stat.st_mtime_ns, stat.st_size)
+    for record in records:
+        if plant_name not in record.get("labels", []):
+            continue
+        taxonomy = record.get("gbif_taxonomy", {})
+        if taxonomy.get("match_type") not in {"EXACT", "HIGHERRANK"}:
+            return None
+        if "/" in record.get("scientific_name", ""):
+            return None
+        return taxonomy
+    return None
+
+
+def get_detailed_plant_profile(plant_name: str):
+    """Return a complete local profile without inventing missing botanical facts."""
+    profile = get_plant_profile(plant_name)
+    if profile is None:
+        return None
+
+    common_name = profile.get("common_name") or plant_name
+    scientific_name = CLASS_LEVEL_SCIENTIFIC_NAMES.get(
+        plant_name,
+        profile.get("scientific_name") or UNAVAILABLE_BOTANICAL_INFO,
+    )
+    features = list(profile.get("features") or [])
+    short_description = profile.get("description") or UNAVAILABLE_BOTANICAL_INFO
+    if features:
+        botanical_description = (
+            f"{short_description} Distinguishing characteristics recorded for this plant include "
+            f"{'; '.join(features)}."
+        )
+    else:
+        botanical_description = short_description
+
+    temperature_humidity = profile.get("temperature_humidity", "")
+    temperature, separator, humidity = temperature_humidity.partition(". ")
+    temperature = temperature.strip().rstrip(".") or UNAVAILABLE_BOTANICAL_INFO
+    humidity = humidity.strip() if separator and humidity.strip() else UNAVAILABLE_BOTANICAL_INFO
+    family = profile.get("family", "").split(" (", 1)[0].strip()
+    if plant_name == "Lilium (Hemerocallis)":
+        family = "Unavailable: the model class combines two genera with different family placements."
+
+    scope_note = ""
+    if " spp." in scientific_name or plant_name == "Orchid":
+        scope_note = (
+            "The checkpoint label represents a broader taxonomic group, not a confirmed individual species; "
+            "care guidance may vary among species in that group."
+        )
+
+    reference_url = plant_reference_search_url(common_name, scientific_name)
+    reference_query = plant_reference_search_query(common_name, scientific_name)
+    reference_sources = [{
+        "name": f"RHS Plant Finder search for {reference_query}",
+        "url": reference_url,
+        "kind": "search",
+    }]
+    audited_taxonomy = _audited_gbif_match(plant_name)
+    taxonomy_url = gbif_taxonomy_match_url(scientific_name)
+    if taxonomy_url and audited_taxonomy:
+        reference_sources.append({
+            "name": f"GBIF accepted taxon: {audited_taxonomy['canonical_name']}",
+            "url": taxonomy_url,
+            "kind": "taxonomy-api",
+        })
+    return {
+        "common_name": common_name,
+        "scientific_name": scientific_name,
+        "family": family or UNAVAILABLE_BOTANICAL_INFO,
+        "short_description": short_description,
+        "botanical_description": botanical_description,
+        "overview": short_description,
+        "botanical_characteristics": features or [UNAVAILABLE_BOTANICAL_INFO],
+        "plant_type": profile.get("plant_type") or UNAVAILABLE_BOTANICAL_INFO,
+        "native_region": _audited_native_region(plant_name),
+        "sunlight": profile.get("sunlight") or UNAVAILABLE_BOTANICAL_INFO,
+        "watering": profile.get("water") or UNAVAILABLE_BOTANICAL_INFO,
+        "soil": profile.get("soil") or UNAVAILABLE_BOTANICAL_INFO,
+        "temperature": temperature,
+        "humidity": humidity,
+        "maintenance": profile.get("maintenance") or UNAVAILABLE_BOTANICAL_INFO,
+        "propagation": _profile_propagation(profile),
+        "pruning": profile.get("pruning_care") or UNAVAILABLE_BOTANICAL_INFO,
+        "pet_safety": profile.get("toxicity_safety") or UNAVAILABLE_BOTANICAL_INFO,
+        "aliases": list(profile.get("aliases") or []),
+        "taxonomic_scope_note": scope_note,
+        "reference_sources": reference_sources,
+    }

@@ -1,0 +1,161 @@
+{
+  "source": "GBIF occurrence API",
+  "queried_at_utc": "2026-10-18T05:04:40.709705+00:00",
+  "accepted_record_licenses": [
+    "CC0_1_0",
+    "CC_BY_4_0"
+  ],
+  "image_license_check": "not included in occurrence-record count; checked per media during collection",
+  "species": [
+    {
+      "label": "Anthurium",
+      "scientific_name": "Anthurium andraeanum",
+      "gbif_taxon_key": 2872695,
+      "match": "exact species",
+      "eligible_occurrence_records": 187,
+      "accepted_name": "Anthurium andraeanum Linden ex Andr\u00e9",
+      "count_kind": "GBIF occurrence records, not images or human-verified usable files",
+      "query_limit": 100000
+    },
+    {
+      "label": "Birds Nest Fern",
+      "scientific_name": "Asplenium nidus",
+      "gbif_taxon_key": 2650676,
+      "match": "exact species",
+      "eligible_occurrence_records": 3597,
+      "accepted_name": "Asplenium nidus L.",
+      "count_kind": "GBIF occurrence records, not images or human-verified usable files",
+      "query_limit": 100000
+    },
+    {
+      "label": "Chinese Money Plant",
+      "scientific_name": "Pilea peperomioides",
+      "gbif_taxon_key": 5669632,
+      "match": "exact species",
+      "eligible_occurrence_records": 27,
+      "accepted_name": "Pilea peperomioides Diels",
+      "count_kind": "GBIF occurrence records, not images or human-verified usable files",
+      "query_limit": 100000
+    },
+    {
+      "label": "Thanksgiving Cactus",
+      "scientific_name": "Schlumbergera truncata",
+      "gbif_taxon_key": 5383983,
+      "match": "exact species",
+      "eligible_occurrence_records": 170,
+      "accepted_name": "Schlumbergera truncata (Haw.) Moran",
+      "count_kind": "GBIF occurrence records, not images or human-verified usable files",
+      "query_limit": 100000
+    },
+    {
+      "label": "Dumb Cane",
+      "scientific_name": "Dieffenbachia seguine",
+      "gbif_taxon_key": 2869345,
+      "match": "exact species",
+      "eligible_occurrence_records": 902,
+      "accepted_name": "Dieffenbachia seguine (Jacq.) Schott",
+      "count_kind": "GBIF occurrence records, not images or human-verified usable files",
+      "query_limit": 100000
+    },
+    {
+      "label": "Elephant Ear",
+      "scientific_name": "Alocasia macrorrhizos",
+      "gbif_taxon_key": 5329904,
+      "match": "exact species",
+      "eligible_occurrence_records": 1068,
+      "accepted_name": "Alocasia macrorrhizos (L.) G.Don",
+      "count_kind": "GBIF occurrence records, not images or human-verified usable files",
+      "query_limit": 100000
+    },
+    {
+      "label": "Money Tree",
+      "scientific_name": "Pachira aquatica",
+      "gbif_taxon_key": 3152235,
+      "match": "exact species",
+      "eligible_occurrence_records": 1485,
+      "accepted_name": "Pachira aquatica Aubl.",
+      "count_kind": "GBIF occurrence records, not images or human-verified usable files",
+      "query_limit": 100000
+    },
+    {
+      "label": "Parlor Palm",
+      "scientific_name": "Chamaedorea elegans",
+      "gbif_taxon_key": 2734661,
+      "match": "exact species",
+      "eligible_occurrence_records": 239,
+      "accepted_name": "Chamaedorea elegans Mart.",
+      "count_kind": "GBIF occurrence records, not images or human-verified usable files",
+      "query_limit": 100000
+    },
+    {
+      "label": "Poinsettia",
+      "scientific_name": "Euphorbia pulcherrima",
+      "gbif_taxon_key": 3066465,
+      "match": "exact species",
+      "eligible_occurrence_records": 1091,
+      "accepted_name": "Euphorbia pulcherrima Willd. ex Klotzsch",
+      "count_kind": "GBIF occurrence records, not images or human-verified usable files",
+      "query_limit": 100000
+    },
+    {
+      "label": "Polka Dot Plant",
+      "scientific_name": "Hypoestes phyllostachya",
+      "gbif_taxon_key": 3173196,
+      "match": "exact species",
+      "eligible_occurrence_records": 792,
+      "accepted_name": "Hypoestes phyllostachya Baker",
+      "count_kind": "GBIF occurrence records, not images or human-verified usable files",
+      "query_limit": 100000
+    },
+    {
+      "label": "Ponytail Palm",
+      "scientific_name": "Beaucarnea recurvata",
+      "gbif_taxon_key": 2768035,
+      "match": "exact species",
+      "eligible_occurrence_records": 219,
+      "accepted_name": "Beaucarnea recurvata (K.Koch & Fintelm.) Lem.",
+      "count_kind": "GBIF occurrence records, not images or human-verified usable files",
+      "query_limit": 100000
+    },
+    {
+      "label": "Dwarf Umbrella Tree",
+      "scientific_name": "Heptapleurum arboricola",
+      "gbif_taxon_key": 3038724,
+      "match": "exact species",
+      "eligible_occurrence_records": 209,
+      "accepted_name": "Heptapleurum arboricola Hayata",
+      "count_kind": "GBIF occurrence records, not images or human-verified usable files",
+      "query_limit": 100000
+    },
+    {
+      "label": "Heartleaf Philodendron",
+      "scientific_name": "Philodendron hederaceum",
+      "gbif_taxon_key": 2871003,
+      "match": "exact species",
+      "eligible_occurrence_records": 1529,
+      "accepted_name": "Philodendron hederaceum (Jacq.) Schott",
+      "count_kind": "GBIF occurrence records, not images or human-verified usable files",
+      "query_limit": 100000
+    },
+    {
+      "label": "Baby Rubber Plant",
+      "scientific_name": "Peperomia obtusifolia",
+      "gbif_taxon_key": 3086423,
+      "match": "exact species",
+      "eligible_occurrence_records": 2300,
+      "accepted_name": "Peperomia obtusifolia (L.) A.Dietr.",
+      "count_kind": "GBIF occurrence records, not images or human-verified usable files",
+      "query_limit": 100000
+    },
+    {
+      "label": "Spider Plant",
+      "scientific_name": "Chlorophytum comosum",
+      "gbif_taxon_key": 2774846,
+      "match": "exact species",
+      "eligible_occurrence_records": 903,
+      "accepted_name": "Chlorophytum comosum (Thunb.) Jacques",
+      "count_kind": "GBIF occurrence records, not images or human-verified usable files",
+      "query_limit": 100000
+    }
+  ]
+}

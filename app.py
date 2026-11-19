@@ -10,7 +10,11 @@ from PIL import Image, UnidentifiedImageError
 
 from model import InferenceEngine, load_inference_engine, resolve_species_metadata
 from ood_detector import check_image_quality, calibrate_and_filter, load_thresholds
-from plant_data import get_plant_profile
+from plant_data import (
+    get_detailed_plant_profile,
+    get_plant_profile,
+    plant_reference_search_url,
+)
 
 st.set_page_config(
     page_title="FloraSense | Plant Intelligence",
@@ -40,7 +44,6 @@ PAGES = (
     "Supported Plants",
     "Model Performance",
     "Model Information",
-    "About Project",
 )
 SIDEBAR_PAGE_LABELS = [
     "🏠 Home",
@@ -48,7 +51,6 @@ SIDEBAR_PAGE_LABELS = [
     "🪴 Plant Care",
     "📚 Supported Plants",
     "📊 Model Performance",
-    "ℹ️ About Project",
 ]
 SIDEBAR_PAGE_LOOKUP = {label: key for label, key in zip(SIDEBAR_PAGE_LABELS, (
     "Home",
@@ -56,7 +58,6 @@ SIDEBAR_PAGE_LOOKUP = {label: key for label, key in zip(SIDEBAR_PAGE_LABELS, (
     "Plant Care",
     "Supported Plants",
     "Model Performance",
-    "About Project",
 ))}
 SIDEBAR_PAGE_LABEL_BY_KEY = {page: label for label, page in SIDEBAR_PAGE_LOOKUP.items()}
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -174,6 +175,43 @@ def load_class_names(checkpoint_dir):
     return [labels[index] for index in range(len(labels))]
 
 
+@st.cache_data(max_entries=64, show_spinner=False)
+def find_plant_image(label):
+    profile = get_plant_profile(label) or {}
+    candidates = {label.casefold()}
+    common_name = profile.get("common_name", "").split("/")[0].strip()
+    if common_name:
+        candidates.add(common_name.casefold())
+    candidates.update(alias.casefold() for alias in profile.get("aliases", []))
+
+    for data_root in ("data_47/train", "data/train"):
+        train_dir = PROJECT_ROOT / data_root
+        if not train_dir.is_dir():
+            continue
+        for candidate in candidates:
+            class_dir = train_dir / candidate
+            if not class_dir.is_dir():
+                class_dir = next(
+                    (
+                        child for child in train_dir.iterdir()
+                        if child.is_dir() and child.name.casefold() == candidate
+                    ),
+                    None,
+                )
+            if class_dir is None:
+                continue
+            image_path = next(
+                (
+                    path for path in sorted(class_dir.iterdir())
+                    if path.is_file() and path.suffix.casefold() in {".jpg", ".jpeg", ".png", ".webp"}
+                ),
+                None,
+            )
+            if image_path:
+                return str(image_path)
+    return None
+
+
 MODEL_OPTIONS = discover_model_options()
 MODEL_OPTION_LABELS = [
     label for label in MODEL_OPTIONS
@@ -203,6 +241,14 @@ def reset_identification():
 
 def navigate_to_identification():
     st.session_state["navigation"] = SIDEBAR_PAGE_LABEL_BY_KEY["Identify Plant"]
+
+
+def open_supported_plant_details(plant_label):
+    st.session_state["supported_plant_detail"] = plant_label
+
+
+def close_supported_plant_details():
+    st.session_state.pop("supported_plant_detail", None)
 
 
 def show_profile_field(profile, key, label):
@@ -593,35 +639,136 @@ elif page == "Plant Care":
             st.info("A care profile is not available for this species.")
 
 elif page == "Supported Plants":
-    st.markdown(
-        f"<p class='page-intro'>These are the {len(SUPPORTED_CLASSES)} labels in the active checkpoint mapping. No external plant photographs are embedded.</p>",
-        unsafe_allow_html=True,
-    )
-    plant_query = st.text_input("Search supported plants", placeholder="Search by common or scientific name")
-    filtered_classes = [
-        name for name in SUPPORTED_CLASSES
-        if plant_query.casefold() in name.casefold()
-        or plant_query.casefold() in resolve_species_metadata(name)[0].casefold()
-        or plant_query.casefold() in resolve_species_metadata(name)[1].casefold()
-    ]
-    st.caption(f"Showing {len(filtered_classes)} of {len(SUPPORTED_CLASSES)} mapped classes.")
-    if not filtered_classes:
-        st.info("No supported plants match this search.")
-    for start in range(0, len(filtered_classes), 3):
-        columns = st.columns(3)
-        for column, name in zip(columns, filtered_classes[start:start + 3]):
-            scientific_name, common_name = resolve_species_metadata(name)
-            profile = get_plant_profile(name) or get_plant_profile(common_name) or {}
-            family = profile.get("family") or "Family information unavailable"
-            index = SUPPORTED_CLASSES.index(name)
-            with column:
-                with st.container(border=True):
-                    st.markdown(
-                        f"<div class='plant-placeholder'><span>{index + 1:02d}</span></div>"
-                        f"<h3>{escape(common_name)}</h3><p class='scientific-name'>{escape(scientific_name)}</p>"
-                        f"<p class='family-label'>{escape(family)}</p>",
-                        unsafe_allow_html=True,
-                    )
+    selected_plant_label = st.session_state.get("supported_plant_detail")
+    if selected_plant_label in SUPPORTED_CLASSES:
+        detail = get_detailed_plant_profile(selected_plant_label)
+        st.button(
+            "← Back to Supported Plants",
+            key="back_to_supported_plants",
+            on_click=close_supported_plant_details,
+        )
+        if detail:
+            st.markdown(f"## {escape(detail['common_name'])}")
+            st.markdown(
+                f"<p class='scientific-name'>{escape(detail['scientific_name'])}</p>",
+                unsafe_allow_html=True,
+            )
+            if detail["taxonomic_scope_note"]:
+                st.info(detail["taxonomic_scope_note"])
+
+            image_path = find_plant_image(selected_plant_label)
+            if image_path:
+                st.image(image_path, width=520, alt=f"{detail['common_name']} plant")
+
+            overview_tab, growing_tab, care_tab, references_tab = st.tabs([
+                "Overview", "Growing conditions", "Care & safety", "References"
+            ])
+            with overview_tab:
+                st.markdown("### Overview")
+                st.write(detail["overview"])
+                st.markdown("### Botanical description")
+                st.write(detail["botanical_description"])
+                details_left, details_right = st.columns(2)
+                with details_left:
+                    show_profile_field(detail, "family", "Plant family")
+                    show_profile_field(detail, "plant_type", "Plant type")
+                with details_right:
+                    show_profile_field(detail, "native_region", "Native region / distribution")
+                st.markdown("### Botanical characteristics")
+                for characteristic in detail["botanical_characteristics"]:
+                    st.markdown(f"- {escape(characteristic)}")
+            with growing_tab:
+                conditions_left, conditions_right = st.columns(2)
+                with conditions_left:
+                    show_profile_field(detail, "sunlight", "Sunlight")
+                    show_profile_field(detail, "watering", "Watering")
+                with conditions_right:
+                    show_profile_field(detail, "soil", "Soil")
+                    show_profile_field(detail, "temperature", "Temperature")
+                    show_profile_field(detail, "humidity", "Humidity")
+            with care_tab:
+                show_profile_field(detail, "maintenance", "Maintenance level")
+                show_profile_field(detail, "propagation", "Propagation")
+                show_profile_field(detail, "pruning", "Pruning instructions")
+                show_profile_field(detail, "pet_safety", "Pet toxicity and safety")
+            with references_tab:
+                for reference in detail["reference_sources"]:
+                    st.link_button(reference["name"], reference["url"], width="stretch")
+                st.caption("The local profile remains available without opening these supplementary references.")
+    else:
+        st.markdown(
+            f"<p class='page-intro'>Browse the {len(SUPPORTED_CLASSES)} plants in the active checkpoint. Search by common name, scientific name, or alias.</p>",
+            unsafe_allow_html=True,
+        )
+        plant_query = st.text_input(
+            "Search supported plants",
+            placeholder="Search by common name, scientific name, or alias",
+            key="supported_plant_search",
+        ).strip().casefold()
+        plant_cards = []
+        for index, name in enumerate(SUPPORTED_CLASSES):
+            detail = get_detailed_plant_profile(name)
+            if detail is None:
+                continue
+            search_values = [
+                name,
+                detail["common_name"],
+                detail["scientific_name"],
+                *detail["aliases"],
+            ]
+            if plant_query and not any(plant_query in value.casefold() for value in search_values):
+                continue
+            plant_cards.append({
+                "index": index + 1,
+                "label": name,
+                "common_name": detail["common_name"],
+                "scientific_name": detail["scientific_name"],
+                "description": detail["short_description"],
+                "image_path": find_plant_image(name),
+                "learn_more_url": detail["reference_sources"][0]["url"],
+            })
+
+        st.caption(f"Showing {len(plant_cards)} of {len(SUPPORTED_CLASSES)} mapped classes.")
+        if not plant_cards:
+            st.info("No supported plants match this search.")
+        else:
+            with st.container(key="supported_plant_gallery"):
+                for start in range(0, len(plant_cards), 3):
+                    columns = st.columns(3)
+                    for column, plant in zip(columns, plant_cards[start:start + 3]):
+                        with column:
+                            with st.container(border=True, height="stretch"):
+                                if plant["image_path"]:
+                                    st.image(
+                                        plant["image_path"],
+                                        width="stretch",
+                                        alt=f"{plant['common_name']} plant",
+                                    )
+                                else:
+                                    st.markdown(
+                                        f"<div class='plant-image-fallback'><span>{plant['index']:02d}</span></div>",
+                                        unsafe_allow_html=True,
+                                    )
+                                st.markdown(
+                                    f"<div class='plant-card-copy'>"
+                                    f"<h3>{escape(plant['common_name'])}</h3>"
+                                    f"<p class='scientific-name'>{escape(plant['scientific_name'])}</p>"
+                                    f"<p class='plant-card-description'>{escape(plant['description'])}</p>"
+                                    f"</div>",
+                                    unsafe_allow_html=True,
+                                )
+                                st.button(
+                                    "View details",
+                                    key=f"view_plant_details_{plant['index']}",
+                                    width="stretch",
+                                    on_click=open_supported_plant_details,
+                                    args=(plant["label"],),
+                                )
+                                st.link_button(
+                                    "Learn more · RHS",
+                                    plant["learn_more_url"],
+                                    width="stretch",
+                                )
 
 elif page == "Model Performance":
     st.markdown(
@@ -785,22 +932,3 @@ elif page == "Model Information":
         "Checkpoint diagnostics, mappings, preprocessing, and OOD thresholds remain paired "
         "with their respective model folders. Unavailable checkpoints are not offered for selection."
     )
-
-elif page == "About Project":
-    st.markdown("<p class='page-intro'>A local college-project demonstration combining image classification with a curated indoor-plant care reference.</p>", unsafe_allow_html=True)
-    left, right = st.columns(2)
-    with left:
-        with st.container(border=True):
-            st.markdown("### Project objective")
-            st.write("Explore how transfer learning can help identify a limited set of indoor plants and present useful care references in one interface.")
-        with st.container(border=True):
-            st.markdown("### Workflow")
-            st.write("Organized plant images are split for training and evaluation. A trained checkpoint supplies ranked class scores; image screening and uncertainty handling remain part of inference.")
-    with right:
-        with st.container(border=True):
-            st.markdown("### Technology")
-            st.write("Streamlit · Python · PyTorch · Torchvision · EfficientNet-B0 · Pillow")
-        with st.container(border=True):
-            st.markdown("### Limitations")
-            st.write(f"The selected checkpoint maps {len(SUPPORTED_CLASSES)} classes. Image labels and dataset coverage may be imperfect. The application does not diagnose disease, and confidence is not a guarantee. Use pet-safety information as a reference and verify important decisions with qualified sources.")
-    st.caption("This demonstration runs image inference locally and does not send uploaded photos to an external service.")
